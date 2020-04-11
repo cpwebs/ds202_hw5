@@ -1,0 +1,106 @@
+---
+title: "Homework #5"
+output: html_document
+author: "Cole Weber; cpwebs"
+date: "4/1/2020"
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Liquor Sales in Iowa
+
+This dataset https://data.iowa.gov/Sales-Distribution/2019-Iowa-Liquor-Sales/38x4-vs5h contains the spirits purchase information of Iowa Class â€œEâ€ liquor licensees by product and date of purchase for 2019. The dataset can be used to analyze total spirits sales in Iowa of individual products at the store level.
+
+**Submission instructions**: Create a folder named `ds202_hw5`, and name the RMarkDown file including your solutions `hw5.Rmd` under this folder. For the submission, create a GitHub repository named `ds202_hw5` under your GitHub account, and push both `hw5.Rmd` and the knitted `hw5.html` before the deadline. I will assume you use the same GitHub username as for your HW4 submission. The latest version of your homework appearing on GitHub before the deadline is graded. *It is crucial to follow the exact folder structure and file names*, so that your homework can be reproduced and graded by an automated script. This homework is **due on April 10** by 11:59 pm.
+
+1. The complete dataset is too large. Download and import the alcohol sales data for Ames only: 
+
+  a. Go to https://data.iowa.gov/Sales-Distribution/2019-Iowa-Liquor-Sales/38x4-vs5h
+  b. Click Filter -- Filter -- Go advanced now
+  c. Add a New Filter Condition: City is Ames.
+  d. Export -- CSV -- Download
+  e. Use `readr::read_csv` to import.
+  
+2. Data cleaning: 
+  a. extract geographic latitude and longitude from the variable `Store Location`
+  b. make sure the variables are in the correct type, by converting incorrect variable types.
+  c. extract year, month and day from the variable `Date` as separate columns.
+  
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggmap)
+library(readr)
+library(lubridate)
+```
+  
+```{r}
+IowaLiquor <- readr::read_csv('2019_Iowa_Liquor_Sales.csv')
+IowaLiquor <- na.omit(IowaLiquor) 
+
+IowaLiquor$`Store Location` <- gsub("POINT ", "", IowaLiquor$`Store Location`)
+IowaLiquor$`Store Location` <- gsub("\\(", "", IowaLiquor$`Store Location`)
+IowaLiquor$`Store Location` <- gsub("\\)", "", IowaLiquor$`Store Location`)
+IowaLiquor <- IowaLiquor %>% mutate(Date1 = Date)
+IowaLiquor <- IowaLiquor %>% separate(`Store Location`, c('Latitude', 'Longitude'), sep=" ")
+IowaLiquor <- separate(IowaLiquor, col=Date, into = c("Month", "Day","Year"))
+IowaLiquor$Date1 <- as.Date(IowaLiquor$Date1, "%m/%d/%Y")
+
+IowaLiquor$Month <- as.numeric(IowaLiquor$Month)
+IowaLiquor$Day <- as.numeric(IowaLiquor$Day)
+IowaLiquor$Year <- as.numeric(IowaLiquor$Year)
+IowaLiquor$Latitude <- as.numeric(IowaLiquor$Latitude)
+IowaLiquor$Longitude <- as.numeric(IowaLiquor$Longitude)
+IowaLiquor$`Vendor Number` <- as.numeric(IowaLiquor$`Vendor Number`)
+
+```
+  
+3. First overview:
+a. Plot a scatterplot of lat and long of store locations. 
+
+
+```{r}
+filtered <- IowaLiquor %>% distinct(IowaLiquor$`Store Name`,.keep_all= TRUE)
+ggplot(filtered, aes(x=Longitude,y=Latitude)) +geom_point() + labs(title = "Latitude and Longitude of Store Locations in Ames")
+```
+ 
+ 
+b. Provide a visual breakdown of the liquor category (by `Category Name`). Include volume sold in the breakdown.
+  
+  
+```{r}
+ggplot(data=IowaLiquor, aes(x=`Category Name`,y=`Volume Sold (Gallons)`)) +  geom_bar(stat="identity") + theme(axis.text.x = element_text(angle = 70, hjust = 1)) + labs(title="Visual Breakdown Liquor Category")
+```
+
+4. Find the daily sales liquor sales in Ames in 2019. Summarize the number of sales, volume of liquor sold, and amount of money spent.
+
+```{r}
+IowaLiquor %>% group_by(Date1) %>% summarise(volume = sum(`Volume Sold (Gallons)`)) %>% ggplot(IowaLiquor, mapping=aes(x = Date1, y =volume)) + geom_line() + scale_x_date() + labs(title="Volume Sold by Date in Ames", x="Date", y="Volume Sold in Gallons")
+IowaLiquor %>% group_by(Date1) %>% summarise(spent = sum(`State Bottle Retail`)) %>% ggplot(IowaLiquor, mapping=aes(x = Date1, y =spent)) + geom_line() + scale_x_date() + labs(title="Amount of Money Spent by Date in Ames", x="Date", y="State Bottle Retail")
+IowaLiquor %>% group_by(Date1) %>% summarise(sales = sum(`Sale (Dollars)`)) %>% ggplot(IowaLiquor, mapping=aes(x = Date1, y =sales)) + geom_line() + scale_x_date() + labs(title="Number of Sales by Date in Ames", x="Date", y="Sale in Dollars")
+```
+
+5. Plot volume sold by day (use a scatterplot of volume by day and facet by month). Discover trends with the help of `geom_smooth`. Describe any patterns.
+
+```{r}
+IowaLiquor %>% group_by(Day,Month) %>% summarise(volumeDay = sum(`Volume Sold (Gallons)`)) %>% ggplot(IowaLiquor2, mapping =aes(x=Day,y=volumeDay)) + geom_point() + facet_wrap(~Month)+ geom_smooth(method = lm, se = FALSE) + labs(title="Volume Sold by Day",x="Day",y="Volume Sold in Gallons")
+```
+
+
+
+  There are a few trends to note in the plot above. First off, there are clear months where volume sold by day is better than others. Upon the different patterns, months like May, April, and December are negatively correlated. This could be because more students don't drink when the end of the semester happens. There seems to be a trend in the summer months of June, July, and August being positively correlated. This could be because more people have free time and drinking out in the warm weather. Fall football months seem to either be consistent or positive correlations which means this promotes more drinking.
+
+
+6. Find the dates for ISU football home games in Fall 2019. Can you see a pattern? 
+
+```{r}
+IowaLiquor6 <- mutate(IowaLiquor,Gameday = (Month==8 & Day==31 & Year==2019) | (Month==9 & Day==14 & Year==2019) | (Month==9 & Day==21 & Year==2019) | (Month==10 & Day==5 & Year==2019) | (Month==10 & Day==26 & Year==2019) | (Month==11 & Day==16 & Year==2019) | (Month==11 & Day==23 & Year==2019))
+ggplot(IowaLiquor6, aes(x=Day,y=`Sale (Dollars)`,color=Gameday)) + geom_point() +facet_wrap(~Month) + labs(title="ISU Home Football Games Affect on Sales")
+```
+
+
+   Above there does seem to be a pattern of fall football games spike in drinking sales. Although the dataset doesn't include any data on the gameday itself, the plot marks the Gameday column either as true or false regarding if it was a gameday or not. There is a trend that can be seen even though gameday data isn't available which is to look at the days leading up to gameday. A day or two before gameday, there is a clear spike in sales for alcohol. For instance, August 31st was the first gameday and right at the end of the month there are higher sales. This also holds true for all other games such as the two games in November on the 16th and 23rd.
+
+Note: your submission is supposed to be fully reproducible, i.e. the TA and I will 'knit' your submission in RStudio. 
